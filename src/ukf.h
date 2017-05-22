@@ -61,6 +61,12 @@ public:
   ///* State dimension
   int n_x_;
 
+  ///* Radar measurement dimension
+  int n_z_radar_;
+
+  ///* Laser measurement dimension
+  int n_z_laser_;
+
   ///* Augmented state dimension
   int n_aug_;
 
@@ -103,17 +109,51 @@ public:
    */
   void UpdateRadar(MeasurementPackage meas_package);
 
-  void GenerateSigmaPoints(MatrixXd* Xsig_out);
+private:
 
-  void AugmentedSigmaPoints(MatrixXd* Xsig_out);
+  /**
+   * @brief GenerateAugmentedSigmaPoints
+   * @param Xsig_aug outarg: will be defined in the function
+   */
+  void GenerateAugmentedSigmaPoints(MatrixXd& Xsig_aug);
 
-  void SigmaPointPrediction(MatrixXd* Xsig_out);
+  /**
+   * @brief SigmaPointPrediction, defines the filter member Xsig_pred_
+   * @param Xsig_aug const
+   * @param delta_t const
+   */
+  void SigmaPointPrediction(const Eigen::MatrixXd &Xsig_aug, const double delta_t);
 
-  void PredictMeanAndCovariance(VectorXd* x_out, MatrixXd* P_out);
+  /**
+   * @brief PredictMeanAndCovariance, changes x_ and P_ to the predicted state
+   */
+  void PredictMeanAndCovariance();
 
-  void PredictRadarMeasurement(VectorXd* z_out, MatrixXd* S_out);
+  /**
+   * @brief PredictLaserMeasurement
+   * @param Zsig outarg: will be defined in the function
+   * @param z_pred outarg: will be defined in the function
+   * @param S outarg: will be defined in the function
+   */
+  void PredictLaserMeasurement(Eigen::MatrixXd& Zsig, Eigen::MatrixXd& z_pred, Eigen::MatrixXd& S);
 
-  void UpdateState(VectorXd* x_out, MatrixXd* P_out);
+  /**
+   * @brief PredictRadarMeasurement
+   * @param Zsig outarg: will be defined in the function
+   * @param z_pred outarg: will be defined in the function
+   * @param S outarg: will be defined in the function
+   */
+  void PredictRadarMeasurement(Eigen::MatrixXd &Zsig, Eigen::MatrixXd &z_pred, Eigen::MatrixXd &S);
+
+  /**
+   * @brief UpdateState, can be used for both laser and radar measurements
+   * @param Zsig
+   * @param z_pred
+   * @param S
+   * @param z
+   * @param n_z
+   */
+  void UpdateState(const Eigen::MatrixXd &Zsig, const Eigen::VectorXd &z_pred, const Eigen::MatrixXd &S, const Eigen::VectorXd &z, const int n_z);
 
 };
 
