@@ -2,6 +2,7 @@
 #define UKF_H
 
 #include "measurement_package.h"
+#include "tools.h"
 #include "Eigen/Dense"
 #include <vector>
 #include <string>
@@ -73,6 +74,9 @@ public:
   ///* Sigma point spreading parameter
   double lambda_;
 
+  double NIS_laser_; // TODO set
+
+  double NIS_radar_; // TODO set
 
   /**
    * Constructor
@@ -110,6 +114,8 @@ public:
   void UpdateRadar(MeasurementPackage meas_package);
 
 private:
+
+  Tools tools_;
 
   /**
    * @brief GenerateAugmentedSigmaPoints
