@@ -21,10 +21,10 @@ UKF::UKF() {
   time_us_ = 0;
 
   // Process noise standard deviation longitudinal acceleration in m/s^2
-  std_a_ = 30; // TODO
+  std_a_ = 0.2; // TODO
 
   // Process noise standard deviation yaw acceleration in rad/s^2
-  std_yawdd_ = 30; // TODO
+  std_yawdd_ = 0.2; // TODO
 
   // Laser measurement noise standard deviation position1 in m
   std_laspx_ = 0.15;
@@ -36,10 +36,10 @@ UKF::UKF() {
   std_radr_ = 0.3;
 
   // Radar measurement noise standard deviation angle in rad
-  std_radphi_ = 0.03; // 0.0175 in class
+  std_radphi_ = 0.0175; // 0.0175 in class // 0.03 in project // TODO choose
 
   // Radar measurement noise standard deviation radius change in m/s
-  std_radrd_ = 0.3; // 0.1 in class
+  std_radrd_ = 0.1; // 0.1 in class // 0.3 in project // TODO choose
 
   // state dimension
   n_x_ = 5;
@@ -63,6 +63,7 @@ UKF::UKF() {
   // initial covariance matrix
   P_ = MatrixXd(n_x_, n_x_);
   P_.fill(0.0);
+  //P_.setIdentity(n_x_, n_x_);
 
   // set weights
   weights_ = VectorXd(2*n_aug_+1);

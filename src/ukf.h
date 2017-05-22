@@ -113,7 +113,8 @@ public:
    */
   void UpdateRadar(MeasurementPackage meas_package);
 
-private:
+  // TODO private, visible for testing
+//private:
 
   Tools tools_;
 
