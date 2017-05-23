@@ -21,10 +21,10 @@ UKF::UKF() {
   time_us_ = 0;
 
   // Process noise standard deviation longitudinal acceleration in m/s^2
-  std_a_ = 1.5; // TODO // good results with 0.2, 0.23, 0.26, 0.4
+  std_a_ = 0.6;
 
   // Process noise standard deviation yaw acceleration in rad/s^2
-  std_yawdd_ = 1.5; // TODO // good results with 0.2, 0.23, 0.26, 0.4
+  std_yawdd_ = 0.5;
 
   // Laser measurement noise standard deviation position1 in m
   std_laspx_ = 0.15;
@@ -62,7 +62,6 @@ UKF::UKF() {
 
   // initial covariance matrix
   P_ = MatrixXd(n_x_, n_x_);
-  //P_.fill(0.0);
   P_.setIdentity(n_x_, n_x_);
 
   // set weights
@@ -120,9 +119,15 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
 
     if (!is_initialized_) {
 
-        // TODO P can be set based on the first measurement type
-
         if (meas_package.sensor_type_ == MeasurementPackage::LASER) {
+
+            // px and py from laser are more precise, set P accordingly
+            P_ << std_laspx_, 0, 0, 0, 0,
+                  0, std_laspy_, 0, 0, 0,
+                  0, 0, 1, 0, 0,
+                  0, 0, 0, 1, 0,
+                  0, 0, 0, 0, 1;
+
             x_ << meas_package.raw_measurements_[0], meas_package.raw_measurements_[1], 0, 0, 0;
         }
         else /*RADAR*/ {
