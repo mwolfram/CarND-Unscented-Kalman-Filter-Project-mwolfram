@@ -74,9 +74,18 @@ public:
   ///* Sigma point spreading parameter
   double lambda_;
 
-  double NIS_laser_; // TODO set
+  ///* Normalized Innovation Squared for Laser Measurements
+  double NIS_laser_;
 
-  double NIS_radar_; // TODO set
+  ///* Normalized Innovation Squared for Radar Measurements
+  double NIS_radar_;
+
+  // TODO
+  int NIS_laser_overshoot_;
+
+  int NIS_radar_overshoot_;
+
+  int measurements_;
 
   /**
    * Constructor

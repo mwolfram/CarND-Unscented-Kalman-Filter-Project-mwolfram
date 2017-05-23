@@ -21,10 +21,10 @@ UKF::UKF() {
   time_us_ = 0;
 
   // Process noise standard deviation longitudinal acceleration in m/s^2
-  std_a_ = 0.2; // TODO
+  std_a_ = 1.5; // TODO // good results with 0.2, 0.23, 0.26, 0.4
 
   // Process noise standard deviation yaw acceleration in rad/s^2
-  std_yawdd_ = 0.2; // TODO
+  std_yawdd_ = 1.5; // TODO // good results with 0.2, 0.23, 0.26, 0.4
 
   // Laser measurement noise standard deviation position1 in m
   std_laspx_ = 0.15;
@@ -36,10 +36,10 @@ UKF::UKF() {
   std_radr_ = 0.3;
 
   // Radar measurement noise standard deviation angle in rad
-  std_radphi_ = 0.0175; // 0.0175 in class // 0.03 in project // TODO choose
+  std_radphi_ = 0.03; // 0.0175 in class // 0.03 in project
 
   // Radar measurement noise standard deviation radius change in m/s
-  std_radrd_ = 0.1; // 0.1 in class // 0.3 in project // TODO choose
+  std_radrd_ = 0.3; // 0.1 in class // 0.3 in project
 
   // state dimension
   n_x_ = 5;
@@ -77,13 +77,19 @@ UKF::UKF() {
   Xsig_pred_ = MatrixXd(n_x_, 2 * n_aug_ + 1);
   Xsig_pred_.fill(0.0);
 
-  /**
-  TODO:
+  // Normalized Innovation Squared for Laser Measurements
+  NIS_laser_ = 0.0;
 
-  Complete the initialization. See ukf.h for other member properties.
+  // Normalized Innovation Squared for Radar Measurements
+  NIS_radar_ = 0.0;
 
-  Hint: one or more values initialized above might be wildly off..., yes and that's the process noise
-  */
+  // TODO document or remove
+  NIS_laser_overshoot_ = 0;
+
+  NIS_radar_overshoot_ = 0;
+
+  measurements_ = 0;
+
 }
 
 UKF::~UKF() {}
@@ -98,7 +104,19 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
     double delta_t = (meas_package.timestamp_ - time_us_) / 1000000.0;
     time_us_ = meas_package.timestamp_;
 
-    std::cout << "Type " << meas_package.sensor_type_ << " after delta_t: " << delta_t << std::endl << meas_package.raw_measurements_ << std::endl;
+    // TODO nicer
+    ++measurements_;
+    std::cout << (double)NIS_laser_overshoot_ / (double)measurements_ << "    " << (double)NIS_radar_overshoot_ / (double)measurements_ << std::endl;
+
+    if (NIS_laser_ > 6.0) {
+        NIS_laser_overshoot_++;
+    }
+    if (NIS_radar_ > 7.8) {
+        NIS_radar_overshoot_++;
+    }
+    // end
+
+    //std::cout << "Type " << meas_package.sensor_type_ << " after delta_t: " << delta_t << std::endl << meas_package.raw_measurements_ << std::endl;
 
     if (!is_initialized_) {
 
@@ -163,16 +181,9 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
     MatrixXd S;
     PredictLaserMeasurement(Zsig, z_pred, S);
 
+    NIS_laser_ = tools_.calculateNIS(meas_package.raw_measurements_, z_pred, S);
+
     UpdateState(Zsig, z_pred, S, meas_package.raw_measurements_, n_z_laser_);
-
-  /**
-  TODO:
-
-  Complete this function! Use lidar data to update the belief about the object's
-  position. Modify the state vector, x_, and covariance, P_.
-
-  You'll also need to calculate the lidar NIS.
-  */
 }
 
 /**
@@ -186,16 +197,9 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
     MatrixXd S;
     PredictRadarMeasurement(Zsig, z_pred, S);
 
+    NIS_radar_ = tools_.calculateNIS(meas_package.raw_measurements_, z_pred, S);
+
     UpdateState(Zsig, z_pred, S, meas_package.raw_measurements_, n_z_radar_);
-
-  /**
-  TODO:
-
-  Complete this function! Use radar data to update the belief about the object's
-  position. Modify the state vector, x_, and covariance, P_.
-
-  You'll also need to calculate the radar NIS.
-  */
 }
 
 void UKF::GenerateAugmentedSigmaPoints(MatrixXd& Xsig_aug) {

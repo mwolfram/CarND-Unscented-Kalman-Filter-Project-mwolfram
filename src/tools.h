@@ -27,6 +27,15 @@ public:
    */
   float normalize(const float angle_rad);
 
+  /**
+   * @brief Tools::calculateNIS
+   * @param z
+   * @param z_pred
+   * @param S
+   * @return
+   */
+  float calculateNIS(const Eigen::VectorXd& z, const Eigen::VectorXd& z_pred, const Eigen::MatrixXd& S);
+
 };
 
 #endif /* TOOLS_H_ */

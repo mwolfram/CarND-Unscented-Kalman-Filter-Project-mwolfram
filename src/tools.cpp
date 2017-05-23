@@ -46,6 +46,10 @@ VectorXd Tools::CalculateRMSE(const vector<VectorXd> &estimations,
 float Tools::normalize(const float angle_rad) {
     double TWO_PI = 2*M_PI;
     double normalized = angle_rad - TWO_PI * floor((angle_rad + M_PI) / TWO_PI );
-    //std::cout << "Normalize angle from " << angle_rad << " to " << normalized << std::endl;
     return normalized;
+}
+
+float Tools::calculateNIS(const VectorXd& z, const VectorXd& z_pred, const MatrixXd& S) {
+    VectorXd z_diff = z - z_pred;
+    return z_diff.transpose() * S.inverse() * z_diff;
 }
