@@ -58,12 +58,17 @@ UKF::UKF() {
 
   // initial state vector
   x_ = VectorXd(n_x_);
-  x_.fill(0.0);
 
   // initial covariance matrix
   P_ = MatrixXd(n_x_, n_x_);
-  P_.fill(0.0);
-  //P_.setIdentity(n_x_, n_x_);
+
+  // set an example covariance matrix
+  //P_ <<  0.0043,   -0.0013,    0.0030,   -0.0022,   -0.0020,
+  //      -0.0013,    0.0077,    0.0011,    0.0071,    0.0060,
+  //       0.0030,    0.0011,    0.0054,    0.0007,    0.0008,
+  //      -0.0022,    0.0071,    0.0007,    0.0098,    0.0100,
+  //      -0.0020,    0.0060,    0.0008,    0.0100,    0.0123;
+  P_.setIdentity(n_x_, n_x_);
 
   // set weights
   weights_ = VectorXd(2*n_aug_+1);
@@ -73,6 +78,7 @@ UKF::UKF() {
     double weight = 0.5/(n_aug_+lambda_);
     weights_(i) = weight;
   }
+
   /**
   TODO:
 
@@ -90,24 +96,46 @@ UKF::~UKF() {}
  */
 void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
 
-    // initially, set the time to the current measurement package timestamp
-    if (time_us_ == 0) {
-        time_us_ = meas_package.timestamp_;
-    }
-
     // calculate delta_t as the difference of the current timestamp and the previous measurement timestamp
-    double delta_t = meas_package.timestamp_ - time_us_;
+    double delta_t = (meas_package.timestamp_ - time_us_) / 1000000.0;
     time_us_ = meas_package.timestamp_;
 
-    Prediction(delta_t);
+    std::cout << "Type " << meas_package.sensor_type_ << " after delta_t: " << delta_t << std::endl << meas_package.raw_measurements_ << std::endl;
 
-    if (meas_package.sensor_type_ == MeasurementPackage::LASER) {
-        UpdateLidar(meas_package);
-    }
-    else /*RADAR*/ {
-        UpdateRadar(meas_package);
-    }
+    if (!is_initialized_) {
 
+        // TODO P can be set based on the first measurement type
+
+        if (meas_package.sensor_type_ == MeasurementPackage::LASER) {
+            x_ << meas_package.raw_measurements_[0], meas_package.raw_measurements_[1], 0, 0, 0;
+        }
+        else /*RADAR*/ {
+            float rho = meas_package.raw_measurements_[0];
+            float phi = meas_package.raw_measurements_[1];
+
+            float px = rho*cos(phi);
+            float py = rho*sin(phi);
+
+            // TODO initialize v, y, yr. Here is the initialization step from the EKF:
+            //float rho_dot = meas_package.raw_measurements_[2];
+            //float vx = rho_dot * cos(phi);
+            //float vy = rho_dot * sin(phi);
+
+            x_ << px, py, 0, 0, 0;
+        }
+
+        is_initialized_ = true;
+    }
+    else {
+        Prediction(delta_t);
+
+        if (meas_package.sensor_type_ == MeasurementPackage::LASER) {
+            UpdateLidar(meas_package);
+        }
+        else /*RADAR*/ {
+            UpdateRadar(meas_package);
+        }
+    }
 }
 
 /**
@@ -210,7 +238,7 @@ void UKF::GenerateAugmentedSigmaPoints(MatrixXd& Xsig_aug) {
 void UKF::SigmaPointPrediction(const MatrixXd& Xsig_aug, const double delta_t) {
 
   //create matrix with predicted sigma points as columns
-  Xsig_pred_ = MatrixXd(n_x_, 2 * n_aug_ + 1);
+  Xsig_pred_ = MatrixXd(n_x_, 2 * n_aug_ + 1); // TODO let's not construct a new object each time. how bout clearing? do we even need to do that?
 
   //predict sigma points
   for (int i = 0; i< 2*n_aug_+1; i++)
@@ -378,7 +406,7 @@ void UKF::PredictRadarMeasurement(MatrixXd& Zsig, MatrixXd& z_pred, MatrixXd& S)
 }
 
 /**
- * @brief UKF::UpdateState, common state update for laser and radar given a measurement vector
+ * @brief UKF::UpdateState, common state update for laser and radar
  * @param Zsig
  * @param z_pred
  * @param S
@@ -392,7 +420,7 @@ void UKF::UpdateState(const MatrixXd& Zsig, const VectorXd& z_pred, const Matrix
 
   //calculate cross correlation matrix
   Tc.fill(0.0);
-  for (int i = 0; i < 2 * n_aug_ + 1; i++) {  //2n+1 simga points
+  for (int i = 0; i < 2 * n_aug_ + 1; i++) {  //2n+1 sigma points
 
     //residual
     VectorXd z_diff = Zsig.col(i) - z_pred;
