@@ -58,16 +58,11 @@ UKF::UKF() {
 
   // initial state vector
   x_ = VectorXd(n_x_);
+  x_.fill(0.0);
 
   // initial covariance matrix
   P_ = MatrixXd(n_x_, n_x_);
-
-  // set an example covariance matrix
-  //P_ <<  0.0043,   -0.0013,    0.0030,   -0.0022,   -0.0020,
-  //      -0.0013,    0.0077,    0.0011,    0.0071,    0.0060,
-  //       0.0030,    0.0011,    0.0054,    0.0007,    0.0008,
-  //      -0.0022,    0.0071,    0.0007,    0.0098,    0.0100,
-  //      -0.0020,    0.0060,    0.0008,    0.0100,    0.0123;
+  //P_.fill(0.0);
   P_.setIdentity(n_x_, n_x_);
 
   // set weights
@@ -78,6 +73,9 @@ UKF::UKF() {
     double weight = 0.5/(n_aug_+lambda_);
     weights_(i) = weight;
   }
+
+  Xsig_pred_ = MatrixXd(n_x_, 2 * n_aug_ + 1);
+  Xsig_pred_.fill(0.0);
 
   /**
   TODO:
@@ -238,7 +236,7 @@ void UKF::GenerateAugmentedSigmaPoints(MatrixXd& Xsig_aug) {
 void UKF::SigmaPointPrediction(const MatrixXd& Xsig_aug, const double delta_t) {
 
   //create matrix with predicted sigma points as columns
-  Xsig_pred_ = MatrixXd(n_x_, 2 * n_aug_ + 1); // TODO let's not construct a new object each time. how bout clearing? do we even need to do that?
+  //Xsig_pred_ = MatrixXd(n_x_, 2 * n_aug_ + 1); // TODO let's not construct a new object each time. how bout clearing? do we even need to do that?
 
   //predict sigma points
   for (int i = 0; i< 2*n_aug_+1; i++)
@@ -290,11 +288,13 @@ void UKF::SigmaPointPrediction(const MatrixXd& Xsig_aug, const double delta_t) {
 void UKF::PredictMeanAndCovariance() {
 
   //predicted state mean
+  x_.fill(0.0);
   for (int i = 0; i < 2 * n_aug_ + 1; i++) {  //iterate over sigma points
     x_ = x_ + weights_(i) * Xsig_pred_.col(i);
   }
 
   //predicted state covariance matrix
+  P_.fill(0.0); // TODO also nec?
   for (int i = 0; i < 2 * n_aug_ + 1; i++) {  //iterate over sigma points
 
     // state difference

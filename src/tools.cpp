@@ -45,5 +45,7 @@ VectorXd Tools::CalculateRMSE(const vector<VectorXd> &estimations,
 
 float Tools::normalize(const float angle_rad) {
     double TWO_PI = 2*M_PI;
-    return angle_rad - TWO_PI * floor((angle_rad + M_PI) / TWO_PI );
+    double normalized = angle_rad - TWO_PI * floor((angle_rad + M_PI) / TWO_PI );
+    //std::cout << "Normalize angle from " << angle_rad << " to " << normalized << std::endl;
+    return normalized;
 }

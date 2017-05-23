@@ -98,8 +98,8 @@ bool testPredictMeanAndCovariance() {
 
     ukf.PredictMeanAndCovariance();
 
-    //std::cout << "x_:" << std::endl << ukf.x_ << std::endl;
-    //std::cout << "P_:" << std::endl << ukf.P_ << std::endl;
+    std::cout << "x_:" << std::endl << ukf.x_ << std::endl;
+    std::cout << "P_:" << std::endl << ukf.P_ << std::endl;
 
     return ukf.x_.isApprox(x_expected, PRECISION) && ukf.P_.isApprox(P_expected, PRECISION);
 }
