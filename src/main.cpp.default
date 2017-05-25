@@ -15,6 +15,9 @@ using Eigen::MatrixXd;
 using Eigen::VectorXd;
 using std::vector;
 
+const double NIS_LASER_95 = 6.0;
+const double NIS_RADAR_95 = 7.8;
+
 void check_arguments(int argc, char* argv[]) {
   string usage_instructions = "Usage instructions: ";
   usage_instructions += argv[0];
@@ -142,6 +145,12 @@ int main(int argc, char* argv[]) {
 
   size_t number_of_measurements = measurement_pack_list.size();
 
+  // for NIS calculation
+  int NIS_laser_overshoot = 0;
+  int NIS_radar_overshoot = 0;
+  int number_of_radar_measurements = 0;
+  int number_of_laser_measurements = 0;
+
   // column names for output file
   out_file_ << "time_stamp" << "\t";  
   out_file_ << "px_state" << "\t";
@@ -177,9 +186,13 @@ int main(int argc, char* argv[]) {
     if (measurement_pack_list[k].sensor_type_ == MeasurementPackage::LASER) {
       // sensor type
       out_file_ << "lidar" << "\t";
+      ++number_of_laser_measurements;
 
       // NIS value
       out_file_ << ukf.NIS_laser_ << "\t";
+      if (ukf.NIS_laser_ > NIS_LASER_95) {
+          ++NIS_laser_overshoot;
+      }
 
       // output the lidar sensor measurement px and py
       out_file_ << measurement_pack_list[k].raw_measurements_(0) << "\t";
@@ -188,9 +201,13 @@ int main(int argc, char* argv[]) {
     } else if (measurement_pack_list[k].sensor_type_ == MeasurementPackage::RADAR) {
       // sensor type
       out_file_ << "radar" << "\t";
+      ++number_of_radar_measurements;
 
       // NIS value
       out_file_ << ukf.NIS_radar_ << "\t";
+      if (ukf.NIS_radar_ > NIS_RADAR_95) {
+          ++NIS_radar_overshoot;
+      }
 
       // output radar measurement in cartesian coordinates
       float ro = measurement_pack_list[k].raw_measurements_(0);
@@ -223,6 +240,15 @@ int main(int argc, char* argv[]) {
   // compute the accuracy (RMSE)
   Tools tools;
   cout << "RMSE" << endl << tools.CalculateRMSE(estimations, ground_truth) << endl;
+
+  // compute how many measurements were "off" according to NIS measurement
+  number_of_laser_measurements = number_of_laser_measurements < 1 ? 1 : number_of_laser_measurements;
+  number_of_radar_measurements = number_of_radar_measurements < 1 ? 1 : number_of_radar_measurements;
+  double laser_off_percentage = (double)NIS_laser_overshoot / (double)number_of_laser_measurements * 100.0;
+  double radar_off_percentage = (double)NIS_radar_overshoot / (double)number_of_radar_measurements * 100.0;
+
+  cout << laser_off_percentage << "% of the laser measurements had a higher NIS than " << NIS_LASER_95 << std::endl;
+  cout << radar_off_percentage << "% of the radar measurements had a higher NIS than " << NIS_RADAR_95 << std::endl;
 
   // close files
   if (out_file_.is_open()) {

@@ -80,13 +80,6 @@ public:
   ///* Normalized Innovation Squared for Radar Measurements
   double NIS_radar_;
 
-  // TODO
-  int NIS_laser_overshoot_;
-
-  int NIS_radar_overshoot_;
-
-  int measurements_;
-
   /**
    * Constructor
    */
@@ -122,8 +115,8 @@ public:
    */
   void UpdateRadar(MeasurementPackage meas_package);
 
-  // TODO private, visible for testing
-//private:
+
+private:
 
   Tools tools_;
 

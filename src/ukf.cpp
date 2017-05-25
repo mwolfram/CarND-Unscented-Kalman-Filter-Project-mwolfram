@@ -82,13 +82,6 @@ UKF::UKF() {
   // Normalized Innovation Squared for Radar Measurements
   NIS_radar_ = 0.0;
 
-  // TODO document or remove
-  NIS_laser_overshoot_ = 0;
-
-  NIS_radar_overshoot_ = 0;
-
-  measurements_ = 0;
-
 }
 
 UKF::~UKF() {}
@@ -102,20 +95,6 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
     // calculate delta_t as the difference of the current timestamp and the previous measurement timestamp
     double delta_t = (meas_package.timestamp_ - time_us_) / 1000000.0;
     time_us_ = meas_package.timestamp_;
-
-    // TODO nicer
-    ++measurements_;
-    std::cout << (double)NIS_laser_overshoot_ / (double)measurements_ << "    " << (double)NIS_radar_overshoot_ / (double)measurements_ << std::endl;
-
-    if (NIS_laser_ > 6.0) {
-        NIS_laser_overshoot_++;
-    }
-    if (NIS_radar_ > 7.8) {
-        NIS_radar_overshoot_++;
-    }
-    // end
-
-    //std::cout << "Type " << meas_package.sensor_type_ << " after delta_t: " << delta_t << std::endl << meas_package.raw_measurements_ << std::endl;
 
     if (!is_initialized_) {
 
@@ -136,11 +115,6 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
 
             float px = rho*cos(phi);
             float py = rho*sin(phi);
-
-            // TODO initialize v, y, yr. Here is the initialization step from the EKF:
-            //float rho_dot = meas_package.raw_measurements_[2];
-            //float vx = rho_dot * cos(phi);
-            //float vy = rho_dot * sin(phi);
 
             x_ << px, py, 0, 0, 0;
         }
@@ -244,9 +218,6 @@ void UKF::GenerateAugmentedSigmaPoints(MatrixXd& Xsig_aug) {
 
 void UKF::SigmaPointPrediction(const MatrixXd& Xsig_aug, const double delta_t) {
 
-  //create matrix with predicted sigma points as columns
-  //Xsig_pred_ = MatrixXd(n_x_, 2 * n_aug_ + 1); // TODO let's not construct a new object each time. how bout clearing? do we even need to do that?
-
   //predict sigma points
   for (int i = 0; i< 2*n_aug_+1; i++)
   {
@@ -303,7 +274,7 @@ void UKF::PredictMeanAndCovariance() {
   }
 
   //predicted state covariance matrix
-  P_.fill(0.0); // TODO also nec?
+  P_.fill(0.0);
   for (int i = 0; i < 2 * n_aug_ + 1; i++) {  //iterate over sigma points
 
     // state difference

@@ -1,260 +1,264 @@
-#include <uWS/uWS.h>
+
+#include <fstream>
 #include <iostream>
-#include "json.hpp"
-#include <math.h>
+#include <sstream>
+#include <vector>
+#include <stdlib.h>
+#include "Eigen/Dense"
 #include "ukf.h"
+#include "tools.h"
+#include "ground_truth_package.h"
+#include "measurement_package.h"
 
 using namespace std;
+using Eigen::MatrixXd;
+using Eigen::VectorXd;
+using std::vector;
 
-// for convenience
-using json = nlohmann::json;
+const double NIS_LASER_95 = 6.0;
+const double NIS_RADAR_95 = 7.8;
 
-// Checks if the SocketIO event has JSON data.
-// If there is data the JSON object in string format will be returned,
-// else the empty string "" will be returned.
-std::string hasData(std::string s) {
-  auto found_null = s.find("null");
-  auto b1 = s.find_first_of("[");
-  auto b2 = s.find_first_of("]");
-  if (found_null != std::string::npos) {
-    return "";
+void check_arguments(int argc, char* argv[]) {
+  string usage_instructions = "Usage instructions: ";
+  usage_instructions += argv[0];
+  usage_instructions += " path/to/input.txt output.txt";
+
+  bool has_valid_args = false;
+
+  // make sure the user has provided input and output files
+  if (argc == 1) {
+    cerr << usage_instructions << endl;
+  } else if (argc == 2) {
+    cerr << "Please include an output file.\n" << usage_instructions << endl;
+  } else if (argc == 3) {
+    has_valid_args = true;
+  } else if (argc > 3) {
+    cerr << "Too many arguments.\n" << usage_instructions << endl;
   }
-  else if (b1 != std::string::npos && b2 != std::string::npos) {
-    return s.substr(b1, b2 - b1 + 1);
+
+  if (!has_valid_args) {
+    exit(EXIT_FAILURE);
   }
-  return "";
 }
 
-int main()
-{
-  uWS::Hub h;
+void check_files(ifstream& in_file, string& in_name,
+                 ofstream& out_file, string& out_name) {
+  if (!in_file.is_open()) {
+    cerr << "Cannot open input file: " << in_name << endl;
+    exit(EXIT_FAILURE);
+  }
+
+  if (!out_file.is_open()) {
+    cerr << "Cannot open output file: " << out_name << endl;
+    exit(EXIT_FAILURE);
+  }
+}
+
+int main(int argc, char* argv[]) {
+
+  check_arguments(argc, argv);
+
+  string in_file_name_ = argv[1];
+  ifstream in_file_(in_file_name_.c_str(), ifstream::in);
+
+  string out_file_name_ = argv[2];
+  ofstream out_file_(out_file_name_.c_str(), ofstream::out);
+
+  check_files(in_file_, in_file_name_, out_file_, out_file_name_);
+
+  /**********************************************
+   *  Set Measurements                          *
+   **********************************************/
+
+  vector<MeasurementPackage> measurement_pack_list;
+  vector<GroundTruthPackage> gt_pack_list;
+
+  string line;
+
+  // prep the measurement packages (each line represents a measurement at a
+  // timestamp)
+  while (getline(in_file_, line)) {
+    string sensor_type;
+    MeasurementPackage meas_package;
+    GroundTruthPackage gt_package;
+    istringstream iss(line);
+    long long timestamp;
+
+    // reads first element from the current line
+    iss >> sensor_type;
+
+    if (sensor_type.compare("L") == 0) {
+      // laser measurement
+
+      // read measurements at this timestamp
+      meas_package.sensor_type_ = MeasurementPackage::LASER;
+      meas_package.raw_measurements_ = VectorXd(2);
+      float px;
+      float py;
+      iss >> px;
+      iss >> py;
+      meas_package.raw_measurements_ << px, py;
+      iss >> timestamp;
+      meas_package.timestamp_ = timestamp;
+      measurement_pack_list.push_back(meas_package);
+    } else if (sensor_type.compare("R") == 0) {
+      // radar measurement
+
+      // read measurements at this timestamp
+      meas_package.sensor_type_ = MeasurementPackage::RADAR;
+      meas_package.raw_measurements_ = VectorXd(3);
+      float ro;
+      float phi;
+      float ro_dot;
+      iss >> ro;
+      iss >> phi;
+      iss >> ro_dot;
+      meas_package.raw_measurements_ << ro, phi, ro_dot;
+      iss >> timestamp;
+      meas_package.timestamp_ = timestamp;
+      measurement_pack_list.push_back(meas_package);
+    }
+
+      // read ground truth data to compare later
+      float x_gt;
+      float y_gt;
+      float vx_gt;
+      float vy_gt;
+      iss >> x_gt;
+      iss >> y_gt;
+      iss >> vx_gt;
+      iss >> vy_gt;
+      gt_package.gt_values_ = VectorXd(4);
+      gt_package.gt_values_ << x_gt, y_gt, vx_gt, vy_gt;
+      gt_pack_list.push_back(gt_package);
+  }
 
   // Create a UKF instance
   UKF ukf;
-  
-  double target_x = 0.0;
-  double target_y = 0.0;
 
-  h.onMessage([&ukf,&target_x,&target_y](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
-    // "42" at the start of the message means there's a websocket message event.
-    // The 4 signifies a websocket message
-    // The 2 signifies a websocket event
+  // used to compute the RMSE later
+  vector<VectorXd> estimations;
+  vector<VectorXd> ground_truth;
 
-    if (length && length > 2 && data[0] == '4' && data[1] == '2')
-    {
+  // start filtering from the second frame (the speed is unknown in the first
+  // frame)
 
-      auto s = hasData(std::string(data));
-      if (s != "") {
-      	
-      	
-        auto j = json::parse(s);
-        std::string event = j[0].get<std::string>();
-        
-        if (event == "telemetry") {
-          // j[1] is the data JSON object
+  size_t number_of_measurements = measurement_pack_list.size();
 
-          double hunter_x = std::stod(j[1]["hunter_x"].get<std::string>());
-          double hunter_y = std::stod(j[1]["hunter_y"].get<std::string>());
-          double hunter_heading = std::stod(j[1]["hunter_heading"].get<std::string>());
-          
-          string lidar_measurment = j[1]["lidar_measurement"];
-          
-          MeasurementPackage meas_package_L;
-          istringstream iss_L(lidar_measurment);
-    	  long long timestamp_L;
+  // for NIS calculation
+  int NIS_laser_overshoot = 0;
+  int NIS_radar_overshoot = 0;
+  int number_of_radar_measurements = 0;
+  int number_of_laser_measurements = 0;
 
-    	  // reads first element from the current line
-    	  string sensor_type_L;
-    	  iss_L >> sensor_type_L;
+  // column names for output file
+  out_file_ << "time_stamp" << "\t";  
+  out_file_ << "px_state" << "\t";
+  out_file_ << "py_state" << "\t";
+  out_file_ << "v_state" << "\t";
+  out_file_ << "yaw_angle_state" << "\t";
+  out_file_ << "yaw_rate_state" << "\t";
+  out_file_ << "sensor_type" << "\t";
+  out_file_ << "NIS" << "\t";  
+  out_file_ << "px_measured" << "\t";
+  out_file_ << "py_measured" << "\t";
+  out_file_ << "px_ground_truth" << "\t";
+  out_file_ << "py_ground_truth" << "\t";
+  out_file_ << "vx_ground_truth" << "\t";
+  out_file_ << "vy_ground_truth" << "\n";
 
-      	  // read measurements at this timestamp
-      	  meas_package_L.sensor_type_ = MeasurementPackage::LASER;
-          meas_package_L.raw_measurements_ = VectorXd(2);
-          float px;
-      	  float py;
-          iss_L >> px;
-          iss_L >> py;
-          meas_package_L.raw_measurements_ << px, py;
-          iss_L >> timestamp_L;
-          meas_package_L.timestamp_ = timestamp_L;
-          
-    	  ukf.ProcessMeasurement(meas_package_L);
-		 
-    	  string radar_measurment = j[1]["radar_measurement"];
-          
-          MeasurementPackage meas_package_R;
-          istringstream iss_R(radar_measurment);
-    	  long long timestamp_R;
 
-    	  // reads first element from the current line
-    	  string sensor_type_R;
-    	  iss_R >> sensor_type_R;
+  for (size_t k = 0; k < number_of_measurements; ++k) {
+    // Call the UKF-based fusion
+    ukf.ProcessMeasurement(measurement_pack_list[k]);
 
-      	  // read measurements at this timestamp
-      	  meas_package_R.sensor_type_ = MeasurementPackage::RADAR;
-          meas_package_R.raw_measurements_ = VectorXd(3);
-          float ro;
-      	  float theta;
-      	  float ro_dot;
-          iss_R >> ro;
-          iss_R >> theta;
-          iss_R >> ro_dot;
-          meas_package_R.raw_measurements_ << ro,theta, ro_dot;
-          iss_R >> timestamp_R;
-          meas_package_R.timestamp_ = timestamp_R;
-          
-    	  ukf.ProcessMeasurement(meas_package_R);
+    // timestamp
+    out_file_ << measurement_pack_list[k].timestamp_ << "\t"; // pos1 - est
 
-	  target_x = ukf.x_[0];
-	  target_y = ukf.x_[1];
+    // output the state vector
+    out_file_ << ukf.x_(0) << "\t"; // pos1 - est
+    out_file_ << ukf.x_(1) << "\t"; // pos2 - est
+    out_file_ << ukf.x_(2) << "\t"; // vel_abs -est
+    out_file_ << ukf.x_(3) << "\t"; // yaw_angle -est
+    out_file_ << ukf.x_(4) << "\t"; // yaw_rate -est
 
-    	  double heading_to_target = atan2(target_y - hunter_y, target_x - hunter_x);
-    	  while (heading_to_target > M_PI) heading_to_target-=2.*M_PI; 
-    	  while (heading_to_target <-M_PI) heading_to_target+=2.*M_PI;
-    	  //turn towards the target
-    	  double heading_difference = heading_to_target - hunter_heading;
-    	  while (heading_difference > M_PI) heading_difference-=2.*M_PI; 
-    	  while (heading_difference <-M_PI) heading_difference+=2.*M_PI;
+    // output lidar and radar specific data
+    if (measurement_pack_list[k].sensor_type_ == MeasurementPackage::LASER) {
+      // sensor type
+      out_file_ << "lidar" << "\t";
+      ++number_of_laser_measurements;
 
-    	  double distance_difference = sqrt((target_y - hunter_y)*(target_y - hunter_y) + (target_x - hunter_x)*(target_x - hunter_x));
-
-          json msgJson;
-          msgJson["turn"] = heading_difference;
-          msgJson["dist"] = distance_difference; 
-          auto msg = "42[\"move_hunter\"," + msgJson.dump() + "]";
-          // std::cout << msg << std::endl;
-          ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
-	  
-        }
-      } else {
-        // Manual driving
-        std::string msg = "42[\"manual\",{}]";
-        ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
+      // NIS value
+      out_file_ << ukf.NIS_laser_ << "\t";
+      if (ukf.NIS_laser_ > NIS_LASER_95) {
+          ++NIS_laser_overshoot;
       }
+
+      // output the lidar sensor measurement px and py
+      out_file_ << measurement_pack_list[k].raw_measurements_(0) << "\t";
+      out_file_ << measurement_pack_list[k].raw_measurements_(1) << "\t";
+
+    } else if (measurement_pack_list[k].sensor_type_ == MeasurementPackage::RADAR) {
+      // sensor type
+      out_file_ << "radar" << "\t";
+      ++number_of_radar_measurements;
+
+      // NIS value
+      out_file_ << ukf.NIS_radar_ << "\t";
+      if (ukf.NIS_radar_ > NIS_RADAR_95) {
+          ++NIS_radar_overshoot;
+      }
+
+      // output radar measurement in cartesian coordinates
+      float ro = measurement_pack_list[k].raw_measurements_(0);
+      float phi = measurement_pack_list[k].raw_measurements_(1);
+      out_file_ << ro * cos(phi) << "\t"; // px measurement
+      out_file_ << ro * sin(phi) << "\t"; // py measurement
     }
 
-  });
+    // output the ground truth
+    out_file_ << gt_pack_list[k].gt_values_(0) << "\t";
+    out_file_ << gt_pack_list[k].gt_values_(1) << "\t";
+    out_file_ << gt_pack_list[k].gt_values_(2) << "\t";
+    out_file_ << gt_pack_list[k].gt_values_(3) << "\n";
 
-  // We don't need this since we're not using HTTP but if it's removed the program
-  // doesn't compile :-(
-  h.onHttpRequest([](uWS::HttpResponse *res, uWS::HttpRequest req, char *data, size_t, size_t) {
-    const std::string s = "<h1>Hello world!</h1>";
-    if (req.getUrl().valueLength == 1)
-    {
-      res->end(s.data(), s.length());
-    }
-    else
-    {
-      // i guess this should be done more gracefully?
-      res->end(nullptr, 0);
-    }
-  });
+    // convert ukf x vector to cartesian to compare to ground truth
+    VectorXd ukf_x_cartesian_ = VectorXd(4);
 
-  h.onConnection([&h](uWS::WebSocket<uWS::SERVER> ws, uWS::HttpRequest req) {
-    std::cout << "Connected!!!" << std::endl;
-  });
+    float x_estimate_ = ukf.x_(0);
+    float y_estimate_ = ukf.x_(1);
+    float vx_estimate_ = ukf.x_(2) * cos(ukf.x_(3));
+    float vy_estimate_ = ukf.x_(2) * sin(ukf.x_(3));
+    
+    ukf_x_cartesian_ << x_estimate_, y_estimate_, vx_estimate_, vy_estimate_;
+    
+    estimations.push_back(ukf_x_cartesian_);
+    ground_truth.push_back(gt_pack_list[k].gt_values_);
 
-  h.onDisconnection([&h](uWS::WebSocket<uWS::SERVER> ws, int code, char *message, size_t length) {
-    ws.close();
-    std::cout << "Disconnected" << std::endl;
-  });
-
-  int port = 4567;
-  if (h.listen(port))
-  {
-    std::cout << "Listening to port " << port << std::endl;
   }
-  else
-  {
-    std::cerr << "Failed to listen to port" << std::endl;
-    return -1;
+
+  // compute the accuracy (RMSE)
+  Tools tools;
+  cout << "RMSE" << endl << tools.CalculateRMSE(estimations, ground_truth) << endl;
+
+  // compute how many measurements were "off" according to NIS measurement
+  number_of_laser_measurements = number_of_laser_measurements < 1 ? 1 : number_of_laser_measurements;
+  number_of_radar_measurements = number_of_radar_measurements < 1 ? 1 : number_of_radar_measurements;
+  double laser_off_percentage = (double)NIS_laser_overshoot / (double)number_of_laser_measurements * 100.0;
+  double radar_off_percentage = (double)NIS_radar_overshoot / (double)number_of_radar_measurements * 100.0;
+
+  cout << laser_off_percentage << "% of the laser measurements had a higher NIS than " << NIS_LASER_95 << std::endl;
+  cout << radar_off_percentage << "% of the radar measurements had a higher NIS than " << NIS_RADAR_95 << std::endl;
+
+  // close files
+  if (out_file_.is_open()) {
+    out_file_.close();
   }
-  h.run();
+
+  if (in_file_.is_open()) {
+    in_file_.close();
+  }
+
+  cout << "Done!" << endl;
+  return 0;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
