@@ -9,8 +9,18 @@ using Eigen::VectorXd;
 
 const double PRECISION = 0.00001;
 
+const double STD_A = 0.2;
+const double STD_YAWDD = 0.2;
+const double STD_RADPHI = 0.0175;
+const double STD_RADRD = 0.1;
+
 bool testGenerateAugmentedSigmaPoints() {
     UKF ukf;
+
+    ukf.std_a_ = STD_A;
+    ukf.std_yawdd_ = STD_YAWDD;
+    ukf.std_radphi_ = STD_RADPHI;
+    ukf.std_radrd_ = STD_RADRD;
 
     //set example state
     ukf.x_ << 5.7441,
@@ -48,6 +58,11 @@ bool testSigmaPointPrediction() {
 
     UKF ukf;
 
+    ukf.std_a_ = STD_A;
+    ukf.std_yawdd_ = STD_YAWDD;
+    ukf.std_radphi_ = STD_RADPHI;
+    ukf.std_radrd_ = STD_RADRD;
+
     //create example sigma point matrix
     MatrixXd Xsig_aug = MatrixXd(ukf.n_aug_, 2 * ukf.n_aug_ + 1);
              Xsig_aug <<
@@ -78,6 +93,11 @@ bool testPredictMeanAndCovariance() {
 
     UKF ukf;
 
+    ukf.std_a_ = STD_A;
+    ukf.std_yawdd_ = STD_YAWDD;
+    ukf.std_radphi_ = STD_RADPHI;
+    ukf.std_radrd_ = STD_RADRD;
+
     ukf.Xsig_pred_ = MatrixXd(ukf.n_x_, 2 * ukf.n_aug_ + 1);
     ukf.Xsig_pred_ <<
              5.9374,  6.0640,   5.925,  5.9436,  5.9266,  5.9374,  5.9389,  5.9374,  5.8106,  5.9457,  5.9310,  5.9465,  5.9374,  5.9359,  5.93744,
@@ -107,6 +127,11 @@ bool testPredictMeanAndCovariance() {
 bool testPredictRadarMeasurement() {
 
     UKF ukf;
+
+    ukf.std_a_ = STD_A;
+    ukf.std_yawdd_ = STD_YAWDD;
+    ukf.std_radphi_ = STD_RADPHI;
+    ukf.std_radrd_ = STD_RADRD;
 
     ukf.Xsig_pred_ = MatrixXd(ukf.n_x_, 2 * ukf.n_aug_ + 1);
     ukf.Xsig_pred_ <<
@@ -139,6 +164,11 @@ bool testPredictRadarMeasurement() {
 bool testUpdateStateAfterRadar() {
 
     UKF ukf;
+
+    ukf.std_a_ = STD_A;
+    ukf.std_yawdd_ = STD_YAWDD;
+    ukf.std_radphi_ = STD_RADPHI;
+    ukf.std_radrd_ = STD_RADRD;
 
     ukf.Xsig_pred_ = MatrixXd(ukf.n_x_, 2 * ukf.n_aug_ + 1);
     ukf.Xsig_pred_ <<
